@@ -29,7 +29,7 @@ Match relative paths against patterns in the syntax of [.gitignore](https://git-
 npm install pathmask
 ```
 
-Node.js 22 or newer.
+Required Node.js 22 or newer.
 
 ## Quick start
 
