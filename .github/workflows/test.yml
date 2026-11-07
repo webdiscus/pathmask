@@ -1,0 +1,59 @@
+name: Test
+
+env:
+  COVERAGE_NODE_VERSION: &coverage-node-version '24'
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  test:
+    name: Test
+    strategy:
+      fail-fast: false # one failed version does not stop the others
+      matrix:
+        node-version: [22, 24, 26]
+        include:
+          - node-version: *coverage-node-version
+            coverage: true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Set up Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check the code format
+        run: npm run lint
+
+      - name: Run tests
+        if: matrix.coverage != true
+        run: npm test
+
+      - name: Run tests with coverage
+        if: matrix.coverage == true
+        run: npm run test:coverage
+
+      - name: Check types
+        run: npm run test:types
+
+      - name: Upload coverage reports to Codecov
+        if: matrix.coverage == true
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          slug: webdiscus/pathmask

@@ -1,0 +1,62 @@
+{
+  "name": "pathmask",
+  "version": "0.1.0",
+  "description": "Match relative paths against patterns in the syntax of .gitignore.",
+  "keywords": [
+    "path",
+    "pattern",
+    "mask",
+    "match",
+    "glob",
+    "gitignore",
+    "ignore",
+    "exclude"
+  ],
+  "homepage": "https://github.com/webdiscus/pathmask#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/webdiscus/pathmask.git"
+  },
+  "bugs": {
+    "url": "https://github.com/webdiscus/pathmask/issues"
+  },
+  "license": "ISC",
+  "author": "webdiscus",
+  "type": "module",
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "sideEffects": false,
+  "engines": {
+    "node": ">=22"
+  },
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "default": "./src/index.js"
+    }
+  },
+  "types": "./src/index.d.ts",
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:types": "tsc -p tsconfig.json",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "check": "npm run lint && npm test && npm run test:types",
+    "publish:public": "npm test && npm run test:types && npm publish --access public",
+    "publish:beta": "npm test && npm run test:types && npm publish --tag beta"
+  },
+  "devDependencies": {
+    "@stylistic/eslint-plugin": "^5.10.0",
+    "@vitest/coverage-v8": "^5.1.0",
+    "eslint": "^10.14.0",
+    "eslint-plugin-jsdoc": "^63.3.3",
+    "typescript": "^7.0.2",
+    "vitest": "^5.1.0"
+  }
+}
