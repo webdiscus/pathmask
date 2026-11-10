@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "paths": {
+      "pathmask": ["./dist/index.d.ts"]
+    }
+  },
+  "files": ["test/dist.types.check.js"]
+}

@@ -7,9 +7,9 @@ import jsdoc from 'eslint-plugin-jsdoc';
  */
 export default [
   // The report of `npm run test:coverage`.
-  { ignores: ['coverage/'] },
+  { ignores: ['coverage/', 'dist/'] },
   {
-    files: ['src/**/*.js', 'test/**/*.js', 'eslint.config.js'],
+    files: ['src/**/*.js', 'rollup/**/*.js', 'test/**/*.js', '*.config.js'],
     plugins: { '@stylistic': stylistic, jsdoc },
     rules: {
       // Layout.

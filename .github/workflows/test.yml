@@ -48,6 +48,9 @@ jobs:
         if: matrix.coverage == true
         run: npm run test:coverage
 
+      - name: Run build plugin tests
+        run: npm run test:build
+
       - name: Check types
         run: npm run test:types
 

@@ -1,64 +1,72 @@
 /**
- * A set of patterns in the syntax of `.gitignore`, for relative paths with `/` between the parts.
+ * Matches relative paths using gitignore-style patterns.
+ * Paths use `/` separators. Directory paths end with `/`.
  *
- * - Lines are read as in a `.gitignore` file: empty lines and lines that start with `#` are skipped,
- *   spaces at the end are removed unless escaped with `\`.
- * - `!pattern` brings back a path that a pattern above matched. The last pattern that matches a path wins.
- * - A matched folder matches everything inside it. `!` can not bring back a path inside a matched folder.
+ * Empty strings and comments starting with `#` are ignored.
+ * Spaces at the end of a pattern are removed unless escaped with a backslash.
+ *
+ * Patterns are applied in array order. The last matching pattern wins.
+ * A pattern starting with `!` cancels a previous match.
+ *
+ * A matched directory also matches all paths inside it.
+ * Negation cannot cancel a match from a parent directory.
  */
 export class PathMask {
   /** @type {Rule[]} */
   #rules;
 
   /**
-   * @param {string[]} patterns The lines of the mask, for example `['*.log', '!keep.log']`.
+   * Creates a path matcher from gitignore-style patterns.
    *
-   * @throws {TypeError} When `patterns` is not an array of strings.
+   * @param {string[]} patterns Patterns applied in array order.
+   *
+   * @throws {TypeError} If patterns is not an array of strings.
    */
   constructor(patterns) {
     if (!Array.isArray(patterns) || patterns.some((pattern) => typeof pattern !== 'string')) {
       throw new TypeError('PathMask: patterns must be an array of strings');
     }
-    this.#rules = patterns.map(parseLine).filter((rule) => rule !== null);
+    this.#rules = patterns.map(parsePattern).filter((rule) => rule !== null);
   }
 
   /**
-   * True when the mask matches the path or a folder that contains it.
+   * Tests a relative path against the configured patterns.
    *
-   * @param {string} path Relative path with `/` between the parts. A folder ends with `/`, for example `data/log/`.
+   * @param {string} path Relative path with `/` separators. Directory paths must end with `/`.
    *
-   * @returns {boolean}
+   * @returns {boolean} True if the path or a parent directory matches after applying negation rules, otherwise false.
    *
-   * @throws {TypeError} When the path is empty, starts with `/`, or has an empty part, `.` or `..`.
+   * @throws {TypeError} If path is not a string, is empty, starts with `/`,
+   *   or contains an empty segment, `.` or `..`.
    */
   matches(path) {
     assertPath(path);
-    const isFolder = path.endsWith('/');
-    const parts = (isFolder ? path.slice(0, -1) : path).split('/');
+    const isDirectory = path.endsWith('/');
+    const parts = (isDirectory ? path.slice(0, -1) : path).split('/');
 
-    for (let count = 1; count < parts.length; count++) {
-      if (this.#matchesEntry(parts.slice(0, count).join('/'), true)) {
+    for (let i = 1; i < parts.length; i++) {
+      if (this.#matchesEntry(parts.slice(0, i).join('/'), true)) {
         return true;
       }
     }
 
-    return this.#matchesEntry(parts.join('/'), isFolder);
+    return this.#matchesEntry(parts.join('/'), isDirectory);
   }
 
   /**
-   * Checks one entry, a file or a folder, without its parent folders.
-   * Every rule is tried in order, the last rule that matches the entry decides: a rule with `!` brings the entry back.
+   * Tests a file or directory against the configured rules without checking parent directories.
+   * Rules are applied in array order. The last matching rule wins.
    *
-   * @param {string} path Path of the entry without `/` at the end.
-   * @param {boolean} isFolder True when the entry is a folder.
+   * @param {string} path Relative path without a trailing `/`.
+   * @param {boolean} isDirectory True if the path represents a directory.
    *
-   * @returns {boolean} True when the last matching rule is not negated, false when no rule matches.
+   * @returns {boolean} True if the last matching rule is not negated, otherwise false.
    */
-  #matchesEntry(path, isFolder) {
+  #matchesEntry(path, isDirectory) {
     let matched = false;
 
     for (const rule of this.#rules) {
-      if (matchesRule(rule, path, isFolder)) {
+      if (matchesRule(rule, path, isDirectory)) {
         matched = !rule.negated;
       }
     }
@@ -67,111 +75,8 @@ export class PathMask {
   }
 }
 
-/**
- * @typedef {object} Rule
- * @property {boolean} negated The line starts with `!`.
- * @property {boolean} folderOnly The pattern ends with `/`.
- * @property {boolean} anchored The pattern has a `/` at the start or inside: it matches the whole path from the root.
- * @property {RegExp | null} regexp Null for a pattern that never matches, for example one with an open `[`.
- */
-
-/**
- * Reads one line of the mask, as git reads a line of `.gitignore`.
- *
- * @param {string} line
- *
- * @returns {Rule | null} Null for an empty line and a comment.
- */
-function parseLine(line) {
-  let body = trimTrailingSpaces(line);
-
-  if (body === '' || body.startsWith('#')) {
-    return null;
-  }
-
-  const negated = body.startsWith('!');
-
-  if (negated) {
-    body = body.slice(1);
-  }
-
-  if (body === '') {
-    return null;
-  }
-
-  const folderOnly = body.endsWith('/') && !isEscaped(body, body.length - 1);
-
-  if (folderOnly) {
-    body = body.slice(0, -1);
-  }
-
-  // A slash at the start or inside anchors the pattern at the root, else it matches the last part of a path.
-  const anchored = body.includes('/');
-
-  if (body.startsWith('/')) {
-    body = body.slice(1);
-  }
-
-  const source = toRegExpSource(body);
-
-  return { negated, folderOnly, anchored, regexp: source === null ? null : new RegExp(`^${source}$`) };
-}
-
-/**
- * Checks one entry against one rule. An anchored rule matches the whole path,
- * another rule matches the last part of the path, the name of the entry.
- *
- * @param {Rule} rule
- * @param {string} path Path of the entry without `/` at the end.
- * @param {boolean} isFolder True when the entry is a folder.
- *
- * @returns {boolean} True when the rule matches the entry, without a look at `!` of the rule.
- */
-function matchesRule(rule, path, isFolder) {
-  if (rule.regexp === null || (rule.folderOnly && !isFolder)) {
-    return false;
-  }
-
-  return rule.regexp.test(rule.anchored ? path : path.slice(path.lastIndexOf('/') + 1));
-}
-
-/**
- * Removes the spaces at the end of a line, as git does. A space after `\` is a character of the name and stays.
- *
- * @param {string} line
- *
- * @returns {string} The line without its trailing spaces.
- */
-function trimTrailingSpaces(line) {
-  let end = line.length;
-
-  while (end > 0 && line[end - 1] === ' ' && !isEscaped(line, end - 1)) {
-    end--;
-  }
-
-  return line.slice(0, end);
-}
-
-/**
- * Checks whether a character is escaped: it follows an odd number of `\`. Two `\` are one plain `\`.
- *
- * @param {string} text
- * @param {number} index Index of the character in the text.
- *
- * @returns {boolean} True when the character is escaped.
- */
-function isEscaped(text, index) {
-  let count = 0;
-
-  for (let at = index - 1; at >= 0 && text[at] === '\\'; at--) {
-    count++;
-  }
-
-  return count % 2 === 1;
-}
-
-/** Character classes of `[[:name:]]`. */
-const CLASSES = {
+/** POSIX character classes of `[[:name:]]`. */
+const CHARACTER_CLASSES = {
   alnum: 'a-zA-Z0-9',
   alpha: 'a-zA-Z',
   blank: ' \\t',
@@ -187,33 +92,142 @@ const CLASSES = {
 };
 
 /**
- * The source of a regular expression for a pattern without its marks `!`, `/` at the start and `/` at the end.
+ * A parsed pattern used to match a file or directory.
  *
- * @param {string} glob
- *
- * @returns {string | null} Null for a pattern that never matches: an open `[`, a `\` at the end, an unknown class.
+ * @typedef {object} Rule
+ * @property {boolean} negated True if the pattern starts with `!`.
+ * @property {boolean} isDir True if the rule matches only directories.
+ * @property {boolean} isPath True if the pattern contains `/` after removing the trailing directory marker.
+ * @property {RegExp | null} rregexp Regular expression used for matching, or null if the pattern cannot match.
  */
-function toRegExpSource(glob) {
+
+/**
+ * Parses a gitignore-style pattern into a matching rule.
+ *
+ * @param {string} pattern Pattern to parse.
+ *
+ * @returns {Rule | null} Parsed rule, or null for an empty string, a comment,
+ *   or a lone `!` after trimming unescaped trailing spaces.
+ */
+function parsePattern(pattern) {
+  let body = trimSpaces(pattern);
+
+  if (body === '' || body.startsWith('#')) {
+    return null;
+  }
+
+  const negated = body.startsWith('!');
+
+  if (negated) {
+    body = body.slice(1);
+  }
+
+  if (body === '') {
+    return null;
+  }
+
+  const isDir = body.endsWith('/') && !isEscaped(body, body.length - 1);
+
+  if (isDir) {
+    body = body.slice(0, -1);
+  }
+
+  // A leading or internal `/` makes the pattern match the full path from the root.
+  const isPath = body.includes('/');
+
+  if (body.startsWith('/')) {
+    body = body.slice(1);
+  }
+
+  const source = toRegExpSource(body);
+
+  return { negated, isDir, isPath, regexp: source === null ? null : new RegExp(`^${source}$`) };
+}
+
+/**
+ * Tests a file or directory against a single rule without applying negation.
+ * Patterns with a leading or internal `/` match the full relative path.
+ * Other patterns match only the last path part.
+ *
+ * @param {Rule} rule Rule to match against.
+ * @param {string} path Relative path without a trailing `/`.
+ * @param {boolean} isDirectory True if the path represents a directory.
+ *
+ * @returns {boolean} True if the rule matches the entry, otherwise false.
+ */
+function matchesRule(rule, path, isDirectory) {
+  if (rule.regexp === null || (rule.isDir && !isDirectory)) {
+    return false;
+  }
+
+  return rule.regexp.test(rule.isPath ? path : path.slice(path.lastIndexOf('/') + 1));
+}
+
+/**
+ * Removes unescaped trailing spaces from a pattern.
+ *
+ * @param {string} pattern Pattern to trim.
+ *
+ * @returns {string} Pattern with unescaped trailing spaces removed.
+ */
+function trimSpaces(pattern) {
+  let i = pattern.length;
+
+  while (i > 0 && pattern[i - 1] === ' ' && !isEscaped(pattern, i - 1)) {
+    i--;
+  }
+
+  return pattern.slice(0, i);
+}
+
+/**
+ * Checks whether a character is escaped.
+ * A character is escaped if the number of backslashes directly before it is odd.
+ *
+ * @param {string} text Text containing the character.
+ * @param {number} index Index of the character to check.
+ *
+ * @returns {boolean} True if the character is escaped, otherwise false.
+ */
+function isEscaped(text, index) {
+  let count = 0;
+
+  for (let at = index - 1; at >= 0 && text[at] === '\\'; at--) {
+    count++;
+  }
+
+  return count % 2 === 1;
+}
+
+/**
+ * Converts a pattern to regular expression source text.
+ *
+ * @param {string} pattern Pattern with the leading `!`, leading `/`, and trailing `/` already removed.
+ *
+ * @returns {string | null} Regular expression source text, or null if the pattern
+ *   has a `[` without a closing `]`, an unknown character class, or a backslash at the end.
+ */
+function toRegExpSource(pattern) {
   let source = '';
 
-  for (let index = 0; index < glob.length; index++) {
-    const char = glob[index];
+  for (let i = 0; i < pattern.length; i++) {
+    const char = pattern[i];
 
-    if (char === '*' && glob[index + 1] === '*') {
-      const atStart = index === 0 || glob[index - 1] === '/';
-      const atEnd = index + 2 === glob.length;
+    if (char === '*' && pattern[i + 1] === '*') {
+      const atStart = i === 0 || pattern[i - 1] === '/';
+      const atEnd = i + 2 === pattern.length;
 
-      if (atStart && glob[index + 2] === '/') {
-        // `**/` at the start or after a `/`: any number of folders, also none.
+      if (atStart && pattern[i + 2] === '/') {
+        // `**/` matches zero or more directories.
         source += '(?:.*/)?';
-        index += 2;
+        i += 2;
         continue;
       }
 
       if (atStart && atEnd) {
-        // `/**` at the end: everything inside.
+        // `/**` at the end matches everything inside the directory.
         source += '.*';
-        index += 1;
+        i += 1;
         continue;
       }
     }
@@ -223,20 +237,20 @@ function toRegExpSource(glob) {
     } else if (char === '?') {
       source += '[^/]';
     } else if (char === '\\') {
-      if (index + 1 === glob.length) {
+      if (i + 1 === pattern.length) {
         return null;
       }
-      source += escape(glob[++index]);
+      source += escapeRegExpChar(pattern[++i]);
     } else if (char === '[') {
-      const set = readSet(glob, index);
+      const parsed = parseCharacterClass(pattern, i);
 
-      if (set === null) {
+      if (parsed === null) {
         return null;
       }
-      source += set.source;
-      index = set.end;
+      source += parsed.source;
+      i = parsed.end;
     } else {
-      source += escape(char);
+      source += escapeRegExpChar(char);
     }
   }
 
@@ -244,55 +258,56 @@ function toRegExpSource(glob) {
 }
 
 /**
- * Reads a set like `[a-z]`, `[!ab]` or `[[:digit:]]` of a pattern.
+ * Parses a character class such as `[a-z]`, `[!ab]` or `[[:digit:]]` from a pattern.
  *
- * @param {string} glob The pattern.
- * @param {number} start Index of the `[` that opens the set.
+ * @param {string} pattern Pattern containing the character class.
+ * @param {number} startIndex Index of the opening `[`.
  *
- * @returns {{ source: string, end: number } | null} The set as a class of a regular expression and the index of its `]`.
- *   Null when the set has no end or an unknown class.
+ * @returns {{ source: string, end: number } | null} Regular expression source text
+ *   and the index of the closing `]`. Returns null if the closing `]` is missing
+ *   or the pattern uses an unknown character class.
  */
-function readSet(glob, start) {
-  let index = start + 1;
-  const negated = glob[index] === '!' || glob[index] === '^';
+function parseCharacterClass(pattern, startIndex) {
+  let i = startIndex + 1;
+  const negated = pattern[i] === '!' || pattern[i] === '^';
 
   if (negated) {
-    index++;
+    i++;
   }
 
   let body = '';
 
-  // A `]` right after `[` or `[!` is a character of the set.
-  for (let first = true; index < glob.length; index++, first = false) {
-    const char = glob[index];
+  // A `]` right after `[`, `[!` or `[^` is part of the character class.
+  for (let isFirst = true; i < pattern.length; i++, isFirst = false) {
+    const char = pattern[i];
 
-    if (char === ']' && !first) {
-      return { source: `(?!/)[${negated ? '^' : ''}${body}]`, end: index };
+    if (char === ']' && !isFirst) {
+      return { source: `(?!/)[${negated ? '^' : ''}${body}]`, end: i };
     }
 
     if (char === '\\') {
-      if (index + 1 === glob.length) {
+      if (i + 1 === pattern.length) {
         return null;
       }
-      body += escapeInSet(glob[++index]);
-    } else if (char === '[' && glob[index + 1] === ':') {
-      const close = glob.indexOf(':]', index + 2);
+      body += escapeClassChar(pattern[++i]);
+    } else if (char === '[' && pattern[i + 1] === ':') {
+      const closeIndex = pattern.indexOf(':]', i + 2);
 
-      if (close === -1) {
+      if (closeIndex === -1) {
         body += '\\[';
         continue;
       }
-      const name = glob.slice(index + 2, close);
+      const name = pattern.slice(i + 2, closeIndex);
 
-      if (!Object.hasOwn(CLASSES, name)) {
+      if (!Object.hasOwn(CHARACTER_CLASSES, name)) {
         return null;
       }
-      body += CLASSES[name];
-      index = close + 1;
-    } else if (char === '-' && !first && glob[index + 1] !== ']') {
+      body += CHARACTER_CLASSES[name];
+      i = closeIndex + 1;
+    } else if (char === '-' && !isFirst && pattern[i + 1] !== ']') {
       body += '-';
     } else {
-      body += escapeInSet(char);
+      body += escapeClassChar(char);
     }
   }
 
@@ -300,33 +315,34 @@ function readSet(glob, start) {
 }
 
 /**
- * Escapes a character that has a meaning in a regular expression.
+ * Escapes a character for use in a regular expression.
  *
- * @param {string} char
+ * @param {string} char Character to escape.
  *
- * @returns {string} The character, with `\` in front when it has a meaning.
+ * @returns {string} Character with a backslash added if needed, otherwise the original character.
  */
-function escape(char) {
+function escapeRegExpChar(char) {
   return /[.*+?^${}()|[\]\\/]/.test(char) ? `\\${char}` : char;
 }
 
 /**
- * Escapes a character that has a meaning inside `[...]` of a regular expression.
+ * Escapes a character for use inside `[...]` in a regular expression.
  *
- * @param {string} char
+ * @param {string} char Character to escape.
  *
- * @returns {string} The character, with `\` in front when it has a meaning in a set.
+ * @returns {string} Character with a backslash added if needed, otherwise the original character.
  */
-function escapeInSet(char) {
+function escapeClassChar(char) {
   return /[\\\]^[-]/.test(char) ? `\\${char}` : char;
 }
 
 /**
- * Stops at a path that `matches()` can not check.
+ * Checks that a path is valid for matching.
  *
- * @param {unknown} path
+ * @param {unknown} path Path to check.
  *
- * @throws {TypeError} When the path is not a string, is empty, starts with `/`, or has an empty part, `.` or `..`.
+ * @throws {TypeError} If path is not a string, is empty, starts with `/`,
+ *   or contains an empty path part, `.` or `..`.
  */
 function assertPath(path) {
   if (typeof path !== 'string' || path === '' || path.startsWith('/')) {

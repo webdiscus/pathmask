@@ -1,6 +1,6 @@
 {
   "name": "pathmask",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Match relative paths against patterns in the syntax of .gitignore.",
   "keywords": [
     "path",
@@ -29,7 +29,7 @@
   },
   "sideEffects": false,
   "engines": {
-    "node": ">=22"
+    "node": ">=20"
   },
   "exports": {
     ".": {
@@ -42,20 +42,27 @@
     "src"
   ],
   "scripts": {
+    "build": "rollup -c",
     "test": "vitest run",
+    "test:build": "vitest run --config vitest.build.config.js",
     "test:coverage": "vitest run --coverage",
     "test:types": "tsc -p tsconfig.json",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "check": "npm run lint && npm test && npm run test:types",
-    "publish:public": "npm test && npm run test:types && npm publish --access public",
-    "publish:beta": "npm test && npm run test:types && npm publish --tag beta"
+    "check": "npm run lint && npm test && npm run test:build && npm run test:types",
+    "publish:public": "npm run check && npm run build && npm run test:dist && npm publish ./dist --access public",
+    "publish:beta": "npm run check && npm run build && npm run test:dist && npm publish ./dist --tag beta",
+    "test:dist": "vitest run --config vitest.dist.config.js && tsc -p tsconfig.dist.json"
   },
   "devDependencies": {
+    "@babel/parser": "^7.29.13",
+    "@rollup/plugin-terser": "^1.0.2",
     "@stylistic/eslint-plugin": "^5.10.0",
     "@vitest/coverage-v8": "^5.1.0",
     "eslint": "^10.14.0",
     "eslint-plugin-jsdoc": "^63.3.3",
+    "rollup": "^4.68.2",
+    "terser": "^5.51.2",
     "typescript": "^7.0.2",
     "vitest": "^5.1.0"
   }
