@@ -7,7 +7,7 @@ import { PathMask } from '../src/index.js';
 
 /**
  * Patterns, a path and the answer of git: true when `git check-ignore` reports the path.
- * A path that ends with `/` is a folder.
+ * A path that ends with `/` is a directory.
  * The test "git gives the same answers" checks every line with git itself.
  *
  * @type {[string[], string, boolean][]}
@@ -159,7 +159,7 @@ describe.skipIf(!hasGit)('git gives the same answers', () => {
   const root = mkdtempSync(path.join(tmpdir(), 'pathmask-'));
   afterAll(() => rmSync(root, { recursive: true, force: true }));
 
-  /** Asks git: a new repository with the patterns in .gitignore and the path as a file or a folder. */
+  /** Asks git: a new repository with the patterns in .gitignore and the path as a file or a directory. */
   function gitMatches(patterns, file) {
     const dir = mkdtempSync(path.join(root, 'repo-'));
     execFileSync('git', ['init', '-q', dir]);

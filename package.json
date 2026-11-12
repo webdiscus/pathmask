@@ -1,7 +1,7 @@
 {
   "name": "pathmask",
-  "version": "0.1.1",
-  "description": "Match relative paths against patterns in the syntax of .gitignore.",
+  "version": "0.1.2",
+  "description": "Match paths using .gitignore syntax.",
   "keywords": [
     "path",
     "pattern",

@@ -1,5 +1,5 @@
 /**
- * Matches relative paths using gitignore-style patterns.
+ * Matches relative paths using `.gitignore` syntax.
  * Paths use `/` separators. Directory paths end with `/`.
  *
  * Empty strings and comments starting with `#` are ignored.
@@ -16,7 +16,7 @@ export class PathMask {
   #rules;
 
   /**
-   * Creates a path matcher from gitignore-style patterns.
+   * Creates a path matcher from patterns in `.gitignore` syntax.
    *
    * @param {string[]} patterns Patterns applied in array order.
    *
@@ -37,7 +37,7 @@ export class PathMask {
    * @returns {boolean} True if the path or a parent directory matches after applying negation rules, otherwise false.
    *
    * @throws {TypeError} If path is not a string, is empty, starts with `/`,
-   *   or contains an empty segment, `.` or `..`.
+   *   or contains an empty path segment, `.` or `..`.
    */
   matches(path) {
     assertPath(path);
@@ -102,7 +102,7 @@ const CHARACTER_CLASSES = {
  */
 
 /**
- * Parses a gitignore-style pattern into a matching rule.
+ * Parses a pattern in `.gitignore` syntax into a matching rule.
  *
  * @param {string} pattern Pattern to parse.
  *
@@ -147,7 +147,7 @@ function parsePattern(pattern) {
 /**
  * Tests a file or directory against a single rule without applying negation.
  * Patterns with a leading or internal `/` match the full relative path.
- * Other patterns match only the last path part.
+ * Other patterns match only the last path segment.
  *
  * @param {Rule} rule Rule to match against.
  * @param {string} path Relative path without a trailing `/`.
@@ -342,7 +342,7 @@ function escapeClassChar(char) {
  * @param {unknown} path Path to check.
  *
  * @throws {TypeError} If path is not a string, is empty, starts with `/`,
- *   or contains an empty path part, `.` or `..`.
+ *   or contains an empty path segment, `.` or `..`.
  */
 function assertPath(path) {
   if (typeof path !== 'string' || path === '' || path.startsWith('/')) {
@@ -351,6 +351,6 @@ function assertPath(path) {
   const parts = (path.endsWith('/') ? path.slice(0, -1) : path).split('/');
 
   if (parts.some((part) => part === '' || part === '.' || part === '..')) {
-    throw new TypeError(`PathMask: path must be a normalized path without empty parts, . or .., got ${JSON.stringify(path)}`);
+    throw new TypeError(`PathMask: path must be a normalized path without empty path segments, . or .., got ${JSON.stringify(path)}`);
   }
 }

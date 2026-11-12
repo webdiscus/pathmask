@@ -6,14 +6,46 @@
 [![downloads](https://img.shields.io/npm/dm/pathmask)](https://www.npmjs.com/package/pathmask)
 [![install size](https://packagephobia.com/badge?p=pathmask)](https://packagephobia.com/result?p=pathmask)
 
-Match relative paths using [.gitignore](https://git-scm.com/docs/gitignore) pattern syntax.
+Match paths using [.gitignore](https://git-scm.com/docs/gitignore) syntax.
 
-Use `pathmask` to filter file lists by including or excluding matching paths.
+Use `pathmask` to filter files by including or excluding matching paths.
+
+## Install
+
+```sh
+npm install pathmask
+```
+
+Requires Node.js 20 or newer. ESM only.
+
+## Quick start
+
+Create a mask from patterns and test each path with `matches()`.
+
+```js
+import { PathMask } from 'pathmask';
+
+const mask = new PathMask([
+  'src/**/*.js',
+  'docs/',
+  '*.md',
+  '!CHANGELOG.md',
+]);
+
+mask.matches('src/index.js'); // true
+mask.matches('src/cli/run.js'); // true
+mask.matches('test/index.js'); // false
+
+mask.matches('docs/logo.png'); // true
+mask.matches('local/logo.png'); // false
+
+mask.matches('README.md'); // true
+mask.matches('test/README.md'); // true
+mask.matches('CHANGELOG.md'); // false
+```
 
 ## Contents
 
-- [Install](#install)
-- [Quick start](#quick-start)
 - [API](#api)
 - [Usage examples](#usage-examples)
 - [Paths](#paths)
@@ -23,103 +55,84 @@ Use `pathmask` to filter file lists by including or excluding matching paths.
 - [Errors](#errors)
 - [TypeScript](#typescript)
 
-## Install
-
-```sh
-npm install pathmask
-```
-
-Required Node.js 22 or newer.
-
-## Quick start
-
-This mask matches `.log` files except `keep.log`, and the `tmp` directory and all its contents.
-
-```js
-import { PathMask } from 'pathmask';
-
-const mask = new PathMask(['*.log', '!keep.log', 'tmp/']);
-
-mask.matches('error.log'); // true
-mask.matches('keep.log'); // false
-mask.matches('tmp/'); // true
-mask.matches('tmp/cache/a.json'); // true
-mask.matches('src/index.js'); // false
-```
-
 ## API
 
 ### new PathMask(patterns)
 
-Creates a path matcher from an array of gitignore-style patterns.
+Creates a path matcher from an array of patterns in `.gitignore` syntax.
 
 | Parameter | Type | Description |
 |---|---|---|
-| `patterns` | `string[]` | Patterns in gitignore syntax. See [Patterns](#patterns). |
+| `patterns` | `string[]` | Patterns in `.gitignore` syntax, see [Patterns](#patterns). |
 
-Throws a `TypeError` when `patterns` is not an array of strings.
+Throws a `TypeError` when `patterns` is not an array of strings, see [Errors](#errors).
 
 ### mask.matches(path)
 
-Tests a relative path against the configured patterns.
+Tests a relative path against the patterns.
 
 | Parameter | Type | Description |
 |---|---|---|
-| `path` | `string` | A path relative to the root of the mask, see [Paths](#paths). |
+| `path` | `string` | A path relative to the root, see [Paths](#paths). |
 
-Returns `true` if the path matches the mask. Otherwise, returns `false`.
+Returns `true` if the mask matches the path or a directory that contains it. Otherwise, returns `false`.
 
-Throws a `TypeError` when the path is empty, starts with `/`, or contains an empty segment, `.` or `..`.
+Throws a `TypeError` when the path is invalid, see [Errors](#errors).
 
 ## Usage examples
 
-### Filter a list of paths
+### Exclude paths
 
-Reuse the same instance to test multiple paths.
+Keep the paths that the mask does not match. Create the mask once and reuse it for all paths.
 
 ```js
-const ignored = new PathMask(['node_modules/', '*.log', '.*']);
+const excluded = new PathMask(['node_modules/', '*.log', '.*']);
 const paths = ['README.md', 'debug.log', '.env', 'src/index.js', 'node_modules/ansis/index.js'];
 
-const files = paths.filter((file) => !ignored.matches(file));
+const files = paths.filter((file) => !excluded.matches(file));
 // ['README.md', 'src/index.js']
 ```
 
-### Filter files in a directory
+### Exclude files in a directory
 
-Read files recursively from `my-project` and its subfolders, then keeps the files that the mask does not match.
+Read the files of `my-project` and keep the files that the mask does not match.
 
 ```js
-import { readdir } from 'node:fs/promises';
+import { readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { PathMask } from 'pathmask';
 
-const myPath = './my-project';
-const ignored = new PathMask(['node_modules/', '*.log', '.*']);
-const entries = await readdir(rootPath, { recursive: true, withFileTypes: true });
+const rootPath = './my-project';
+const excluded = new PathMask(['node_modules/', '*.log', '.*']);
+const entries = readdirSync(rootPath, { recursive: true });
 
 const files = [];
-for (const entry of entries) {
-  if (!entry.isFile()) continue;
+for (const file of entries) {
+  if (!statSync(path.join(rootPath, file)).isFile()) continue;
 
-  const file = path.relative(myPath, path.join(entry.parentPath, entry.name));
-
-  if (!ignored.matches(file)) {
+  if (!excluded.matches(file)) {
     files.push(file);
   }
 }
 // ['README.md', 'src/index.js']
 ```
 
-### Select files
+### Include paths
 
-Retain paths that match the mask. This mask selects JavaScript files in `src` and Markdown files at any subfolder.
+Keep the paths that the mask matches. This mask matches JavaScript files in `src` and Markdown files in any directory.
 
 ```js
-const selected = new PathMask(['src/**/*.js', '*.md']);
-const paths = ['README.md', 'docs/guide.md', 'package.json', 'src/index.js', 'src/cli/run.js', 'test/run.test.js'];
+const included = new PathMask(['src/**/*.js', '*.md']);
+const paths = [
+  'README.md',
+  'docs/guide.md',
+  'package.json',
+  'src/index.js',
+  'src/cli/run.js',
+  'test/run.test.js',
+];
 
-const files = paths.filter((file) => selected.matches(file));
+const files = paths.filter((file) => included.matches(file));
 // ['README.md', 'docs/guide.md', 'src/index.js', 'src/cli/run.js']
 ```
 
@@ -128,7 +141,7 @@ Use `/*.md` to match Markdown files only in the root. This pattern matches `READ
 ## Paths
 
 Paths are relative to a root chosen by the caller. The root is not passed to `PathMask`.
-Use `/` between path segments and a trailing `/` to identify a directory.
+Use `/` between path segments. A path that ends with `/` is a directory. Any other path is a file.
 
 | Path | Description |
 |---|---|
@@ -137,8 +150,11 @@ Use `/` between path segments and a trailing `/` to identify a directory.
 | `data/` | the directory `data` |
 | `data/log/` | the directory `log` in the directory `data` |
 
-Paths must not start with `/` or contain empty segments, `.` or `..`. Use `path.relative()` to obtain a relative path
-and normalize its separators to `/`. A backslash is treated as a literal character in a name.
+A pattern that ends with `/` matches only directories.
+Pass a directory as `data/` to match it with the pattern `data/`.
+
+A path must not start with `/` or contain empty path segments, `.` or `..`. Use `path.relative()` to get a relative path
+and normalize its separators to `/`. In a path, a backslash is a normal character.
 
 On Windows, `path.relative()` uses backslashes as separators. Convert them to `/` before calling `matches()`.
 
@@ -148,25 +164,35 @@ mask.matches(file.replaceAll(path.sep, '/'));
 
 ## Patterns
 
-Patterns use gitignore syntax.
+Patterns use `.gitignore` syntax.
 
-| Pattern | Matches |
+| Wildcard | Matches |
 |---|---|
-| `name` | every file or directory with this name, in any directory |
-| `/name` | only `name` in the root |
-| `a/b` | only this path from the root, a `/` at the start or inside anchors the pattern |
-| `name/` | directories named `name` at any depth |
 | `*` | zero or more characters except `/`, including leading dots |
 | `?` | one character except `/` |
 | `[abc]`, `[a-z]` | one of the characters |
 | `[!abc]`, `[^abc]` | one character that is not in the set |
 | `[[:digit:]]` | one digit |
-| `**/name` | `name` in any directory, also in the root |
-| `a/**` | everything inside `a` |
-| `a/**/b` | `b` in `a` or in any directory inside `a` |
 
-Supported character classes are `alnum`, `alpha`, `blank`, `cntrl`, `digit`, `graph`, `lower`, `print`, `punct`,
-`space`, `upper`, and `xdigit`.
+Supported character classes: `alnum`, `alpha`, `blank`, `cntrl`, `digit`, `graph`, `lower`, `print`, `punct`, `space`, `upper`, `xdigit`.
+
+| Pattern | Matches the paths | Does not match the paths |
+|---|---|---|
+| `a` | `a`, `c/a`, `c/d/a/` | `ab`, `c/a.txt` |
+| `/a` | `a`, `a/` | `c/a` |
+| `a/b` | `a/b`, `a/b/` | `c/a/b` |
+| `a/` | `a/`, `c/a/` | `a`, `c/a` |
+| `**/a/b` | `a/b`, `c/a/b`, `c/d/a/b` | `a/c/b` |
+| `a/**` | `a/c`, `a/c/d` | `a/`, `a` |
+| `a/**/b` | `a/b`, `a/c/b`, `a/c/d/b` | `b`, `c/a/b` |
+| `*.log` | `a.log`, `c/a.log`, `c/d/a.log` | `a.txt` |
+| `/*.log` | `a.log` | `c/a.log` |
+| `a/*.log` | `a/b.log` | `b.log`, `a/c/b.log` |
+| `a/**/*.log` | `a/b.log`, `a/c/b.log`, `a/c/d/b.log` | `b.log`, `c/a/b.log` |
+
+A `/` at the start or inside a pattern anchors it to the root, as in `/a` and `a/b`.
+A pattern without such a `/` matches at any depth, as in `a` and `a/`.
+Paths passed to `matches()` never start with `/`, see [Paths](#paths).
 
 A matched directory also matches all paths within it.
 
@@ -180,12 +206,12 @@ mask.matches('data/log/error.log'); // true
 Matching is case-sensitive.
 
 Patterns with an unclosed character class, an unknown character class such as `[[:name:]]`, or a trailing backslash never match.
+The constructor does not throw on them.
 
 ### Pattern syntax
 
-Empty strings and strings beginning with `#` are ignored. 
-Trailing spaces are removed unless escaped with `\`.
-To match a name ending with a space, escape the trailing space, for example `notes\ ` matches the name `notes `.
+Empty strings, strings that start with `#`, and a single `!` are ignored.
+Spaces at the end of a pattern are removed. To keep a space at the end, escape it with `\`, see [Escaping](#escaping).
 
 ```js
 const mask = new PathMask(['# logs', '*.log', '', 'tmp/']);
@@ -193,8 +219,8 @@ const mask = new PathMask(['# logs', '*.log', '', 'tmp/']);
 
 ## Negation
 
-A pattern prefixed with `!` negates a previous match. Patterns are evaluated in array order.
-The last matching pattern determines the result for an entry.
+Patterns are applied in array order. The last matching pattern determines the result for a path.
+A pattern prefixed with `!` negates a previous match.
 
 ```js
 const mask = new PathMask(['*.log', '!keep.log']);
@@ -203,19 +229,27 @@ mask.matches('error.log'); // true
 mask.matches('keep.log'); // false
 ```
 
-Negation cannot override a matched parent directory. 
-To allow exceptions within a directory, match its contents instead of the directory itself.
+Negation cannot override a matched parent directory.
+To allow exceptions within a directory, match its contents, for example `data/*`.
 
 ```js
 new PathMask(['data/', '!data/keep.json']).matches('data/keep.json'); // true
 new PathMask(['data/*', '!data/keep.json']).matches('data/keep.json'); // false
 ```
 
-A negated pattern has no effect without a previous match. A mask containing only negated patterns matches nothing.
+To exclude all paths inside a directory, negate its contents with `/**`, for example `!drafts/**`.
+
+```js
+new PathMask(['*.md', '!drafts/']).matches('drafts/a.md'); // true
+new PathMask(['*.md', '!drafts/**']).matches('drafts/a.md'); // false
+```
+
+A negated pattern has no effect without a previous match.
 
 ## Escaping
 
-A backslash escapes the next character, causing it to be treated literally.
+A backslash escapes the next character, so the character is matched literally.
+The table shows patterns as plain text. In a JavaScript string, write `\\` for one backslash.
 
 | Pattern | Matches |
 |---|---|
@@ -224,14 +258,12 @@ A backslash escapes the next character, causing it to be treated literally.
 | `\*.txt` | the name `*.txt` |
 | `name\ ` | the name `name ` with a space at the end |
 
-Escape a leading `!` or `#` to match it literally. Without escaping, a leading `!` indicates negation and a leading `#` indicates a comment.
+Escape a leading `!` or `#` to match it literally. Without escaping, a leading `!` starts a negation and a leading `#` starts a comment.
 
 ```js
 new PathMask(['!important']).matches('!important'); // false
 new PathMask(['\\!important']).matches('!important'); // true
 ```
-
-In a JavaScript string, write `\\` to represent a single backslash.
 
 ## Errors
 
@@ -241,11 +273,12 @@ In a JavaScript string, write `\\` to represent a single backslash.
 PathMask: patterns must be an array of strings
 ```
 
-`mask.matches(path)` throws a `TypeError` when the path is empty, starts with `/`, or contains an empty segment, `.` or `..`.
+`mask.matches(path)` throws a `TypeError` when the path is not a string, is empty, starts with `/`,
+or contains an empty path segment, `.` or `..`.
 
 ```text
 PathMask: path must be a relative path, got "/a"
-PathMask: path must be a normalized path without empty parts, . or .., got "a/../b"
+PathMask: path must be a normalized path without empty path segments, . or .., got "a/../b"
 ```
 
 ## TypeScript

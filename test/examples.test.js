@@ -1,20 +1,29 @@
 // The examples of README.md, line by line. A change of an example in README.md needs the same change here.
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { readdir } from 'node:fs/promises';
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, test } from 'vitest';
 import { PathMask } from '../src/index.js';
 
 describe('Quick start', () => {
-  test('matches logs except keep.log, and the folder tmp with all its content', () => {
-    const mask = new PathMask(['*.log', '!keep.log', 'tmp/']);
+  test('creates a mask from patterns and tests each path', () => {
+    const mask = new PathMask([
+      'src/**/*.js',
+      'docs/',
+      '*.md',
+      '!CHANGELOG.md',
+    ]);
 
-    expect(mask.matches('error.log')).toBe(true);
-    expect(mask.matches('keep.log')).toBe(false);
-    expect(mask.matches('tmp/')).toBe(true);
-    expect(mask.matches('tmp/cache/a.json')).toBe(true);
-    expect(mask.matches('src/index.js')).toBe(false);
+    expect(mask.matches('src/index.js')).toBe(true);
+    expect(mask.matches('src/cli/run.js')).toBe(true);
+    expect(mask.matches('test/index.js')).toBe(false);
+
+    expect(mask.matches('docs/logo.png')).toBe(true);
+    expect(mask.matches('local/logo.png')).toBe(false);
+
+    expect(mask.matches('README.md')).toBe(true);
+    expect(mask.matches('test/README.md')).toBe(true);
+    expect(mask.matches('CHANGELOG.md')).toBe(false);
   });
 });
 
@@ -24,44 +33,41 @@ describe('API', () => {
   });
 });
 
-describe('Filter a list of paths', () => {
+describe('Exclude paths', () => {
   test('keeps the paths that the mask does not match', () => {
-    const ignored = new PathMask(['node_modules/', '*.log', '.*']);
+    const excluded = new PathMask(['node_modules/', '*.log', '.*']);
     const paths = ['README.md', 'debug.log', '.env', 'src/index.js', 'node_modules/ansis/index.js'];
 
-    const files = paths.filter((file) => !ignored.matches(file));
+    const files = paths.filter((file) => !excluded.matches(file));
 
     expect(files).toEqual(['README.md', 'src/index.js']);
   });
 });
 
-describe('Filter the files of a folder', () => {
-  test('keeps the files of the folder that the mask does not match', async () => {
+describe('Exclude files in a directory', () => {
+  test('keeps the files of the directory that the mask does not match', () => {
     const tempPath = mkdtempSync(path.join(tmpdir(), 'pathmask-'));
 
     try {
       const rootPath = path.join(tempPath, 'my-project');
 
-      // The same files as in the list of "Filter a list of paths".
+      // The same files as in the list of "Exclude paths".
       for (const file of ['README.md', 'debug.log', '.env', 'src/index.js', 'node_modules/ansis/index.js']) {
         mkdirSync(path.dirname(path.join(rootPath, file)), { recursive: true });
         writeFileSync(path.join(rootPath, file), '');
       }
 
-      const ignored = new PathMask(['node_modules/', '*.log', '.*']);
-      const entries = await readdir(rootPath, { recursive: true, withFileTypes: true });
+      const excluded = new PathMask(['node_modules/', '*.log', '.*']);
+      const entries = readdirSync(rootPath, { recursive: true });
 
       const files = [];
 
-      for (const entry of entries) {
-        if (!entry.isFile()) {
+      for (const file of entries) {
+        if (!statSync(path.join(rootPath, file)).isFile()) {
           continue;
         }
 
-        // PathMask needs a path relative to the root.
-        const file = path.relative(rootPath, path.join(entry.parentPath, entry.name));
-
-        if (!ignored.matches(file)) {
+        if (!excluded.matches(file)) {
           files.push(file);
         }
       }
@@ -74,26 +80,33 @@ describe('Filter the files of a folder', () => {
   });
 });
 
-describe('Select files', () => {
-  const paths = ['README.md', 'docs/guide.md', 'package.json', 'src/index.js', 'src/cli/run.js', 'test/run.test.js'];
+describe('Include paths', () => {
+  const paths = [
+    'README.md',
+    'docs/guide.md',
+    'package.json',
+    'src/index.js',
+    'src/cli/run.js',
+    'test/run.test.js',
+  ];
 
   test('keeps the paths that the mask matches', () => {
-    const selected = new PathMask(['src/**/*.js', '*.md']);
+    const included = new PathMask(['src/**/*.js', '*.md']);
 
-    const files = paths.filter((file) => selected.matches(file));
+    const files = paths.filter((file) => included.matches(file));
 
     expect(files).toEqual(['README.md', 'docs/guide.md', 'src/index.js', 'src/cli/run.js']);
   });
 
   test('/*.md matches only the Markdown files of the root', () => {
-    const selected = new PathMask(['src/**/*.js', '/*.md']);
+    const included = new PathMask(['src/**/*.js', '/*.md']);
 
-    expect(paths.filter((file) => selected.matches(file))).toEqual(['README.md', 'src/index.js', 'src/cli/run.js']);
+    expect(paths.filter((file) => included.matches(file))).toEqual(['README.md', 'src/index.js', 'src/cli/run.js']);
   });
 });
 
 describe('Paths', () => {
-  test('a path with \\ between its parts matches after the replace', () => {
+  test('a path with \\ between its path segments matches after the replace', () => {
     const mask = new PathMask(['data/*.log']);
     const file = ['data', 'error.log'].join('\\');
 
@@ -102,7 +115,38 @@ describe('Paths', () => {
 });
 
 describe('Patterns', () => {
-  test('a matched folder matches everything inside it', () => {
+  // The table of README.md: a pattern, the paths it matches, the paths it does not match.
+  const table = [
+    ['a', ['a', 'c/a', 'c/d/a/'], ['ab', 'c/a.txt']],
+    ['/a', ['a', 'a/'], ['c/a']],
+    ['a/b', ['a/b', 'a/b/'], ['c/a/b']],
+    ['a/', ['a/', 'c/a/'], ['a', 'c/a']],
+    ['**/a/b', ['a/b', 'c/a/b', 'c/d/a/b'], ['a/c/b']],
+    ['a/**', ['a/c', 'a/c/d'], ['a/', 'a']],
+    ['a/**/b', ['a/b', 'a/c/b', 'a/c/d/b'], ['b', 'c/a/b']],
+    ['*.log', ['a.log', 'c/a.log', 'c/d/a.log'], ['a.txt']],
+    ['/*.log', ['a.log'], ['c/a.log']],
+    ['a/*.log', ['a/b.log'], ['b.log', 'a/c/b.log']],
+    ['a/**/*.log', ['a/b.log', 'a/c/b.log', 'a/c/d/b.log'], ['b.log', 'c/a/b.log']],
+  ];
+
+  test.each(table)('%s matches the paths', (pattern, matchedPaths) => {
+    const mask = new PathMask([pattern]);
+
+    for (const file of matchedPaths) {
+      expect(mask.matches(file), file).toBe(true);
+    }
+  });
+
+  test.each(table)('%s does not match the paths', (pattern, matchedPaths, otherPaths) => {
+    const mask = new PathMask([pattern]);
+
+    for (const file of otherPaths) {
+      expect(mask.matches(file), file).toBe(false);
+    }
+  });
+
+  test('a matched directory matches everything inside it', () => {
     const mask = new PathMask(['data/']);
 
     expect(mask.matches('data/')).toBe(true);
@@ -128,9 +172,14 @@ describe('Negation', () => {
     expect(mask.matches('keep.log')).toBe(false);
   });
 
-  test('! brings back nothing inside a matched folder', () => {
+  test('! brings back nothing inside a matched directory', () => {
     expect(new PathMask(['data/', '!data/keep.json']).matches('data/keep.json')).toBe(true);
     expect(new PathMask(['data/*', '!data/keep.json']).matches('data/keep.json')).toBe(false);
+  });
+
+  test('! with /** excludes all paths inside a directory', () => {
+    expect(new PathMask(['*.md', '!drafts/']).matches('drafts/a.md')).toBe(true);
+    expect(new PathMask(['*.md', '!drafts/**']).matches('drafts/a.md')).toBe(false);
   });
 });
 
@@ -151,7 +200,7 @@ describe('Errors', () => {
 
     expect(() => mask.matches('/a')).toThrow(new TypeError('PathMask: path must be a relative path, got "/a"'));
     expect(() => mask.matches('a/../b')).toThrow(
-      new TypeError('PathMask: path must be a normalized path without empty parts, . or .., got "a/../b"'),
+      new TypeError('PathMask: path must be a normalized path without empty path segments, . or .., got "a/../b"'),
     );
   });
 });

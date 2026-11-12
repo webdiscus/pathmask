@@ -1,5 +1,5 @@
 /**
- * A set of patterns in the syntax of `.gitignore`, for relative paths with `/` between the parts.
+ * A set of patterns in `.gitignore` syntax, for relative paths with `/` between path segments.
  */
 export declare class PathMask {
   /**
@@ -9,9 +9,9 @@ export declare class PathMask {
   constructor(patterns: readonly string[]);
 
   /**
-   * True when the mask matches the path or a folder that contains it.
-   * @param path Relative path with `/` between the parts. A folder ends with `/`, for example `data/log/`.
-   * @throws {TypeError} When the path is empty, starts with `/`, or has an empty part, `.` or `..`.
+   * True when the mask matches the path or a directory that contains it.
+   * @param path Relative path with `/` between path segments. A directory ends with `/`, for example `data/log/`.
+   * @throws {TypeError} When the path is not a string, is empty, starts with `/`, or contains an empty path segment, `.` or `..`.
    */
   matches(path: string): boolean;
 }
