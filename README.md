@@ -44,6 +44,27 @@ mask.matches('test/README.md'); // true
 mask.matches('CHANGELOG.md'); // false
 ```
 
+## Why pathmask
+
+Tools often get a list of paths from a config and need to filter it, for example to choose which files to build, lint or deploy.
+The `.gitignore` syntax is the format every developer already knows for such rules.
+It is based on the basic POSIX glob syntax with `*`, `?` and `[...]`, and adds a few simple rules for lists of paths.
+`pathmask` tests a given path against these rules and follows the behavior of git, so a pattern means the same here and in `.gitignore`.
+
+- Short rules: a pattern without `/` matches at any depth, `dist/` matches a directory with all its contents.
+- Exceptions: patterns are applied in order, `!` brings a path back.
+- Dotfiles: `*` matches names that start with `.`, no options needed.
+- One reference: git defines the behavior, there are no library-specific options.
+
+For common rules, the `.gitignore` syntax is shorter and easier to read than glob.
+
+| glob | pathmask |
+|---|---|
+| `['**/node_modules/**', '**/*.log']` | `['node_modules/', '*.log']` |
+| `['**/*.log', '!**/keep.log']` | `['*.log', '!keep.log']` |
+| `['**/dist', '**/dist/**']` | `['dist/']` |
+| `['**/.*']` with the option `{ dot: true }` | `['.*']` |
+
 ## Contents
 
 - [API](#api)
@@ -52,6 +73,7 @@ mask.matches('CHANGELOG.md'); // false
 - [Patterns](#patterns)
 - [Negation](#negation)
 - [Escaping](#escaping)
+- [Glob equivalents](#glob-equivalents)
 - [Errors](#errors)
 - [TypeScript](#typescript)
 
@@ -264,6 +286,23 @@ Escape a leading `!` or `#` to match it literally. Without escaping, a leading `
 new PathMask(['!important']).matches('!important'); // false
 new PathMask(['\\!important']).matches('!important'); // true
 ```
+
+## Glob equivalents
+
+Brace expansion and extglob patterns of glob can be written as a list of patterns, a character set or a negation.
+A glob pattern always starts at the root, so a pattern without `/` gets a leading `/` to match the same paths.
+
+| glob | pathmask |
+|---|---|
+| `src/*.{js,ts}` | `['src/*.js', 'src/*.ts']` |
+| `*.{j,t}s` | `['/*.[jt]s']` |
+| `app.log.{1..3}` | `['/app.log.[1-3]']` |
+| `src/*.@(js\|ts)` | `['src/*.js', 'src/*.ts']` |
+| `app?(.min).js` | `['/app.js', '/app.min.js']` |
+| `src/!(*.test).js` | `['src/*.js', '!src/*.test.js']` |
+| `!(vendor)/*.js` | `['*/*.js', '!vendor/*.js']` |
+| `app.log.+([0-9])` | `['/app.log.[0-9]', '/app.log.[0-9][0-9]']`, up to two digits |
+| `app*([0-9]).log` | `['/app.log', '/app[0-9].log', '/app[0-9][0-9].log']`, up to two digits |
 
 ## Errors
 
