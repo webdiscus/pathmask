@@ -32,10 +32,10 @@ describe('Why pathmask', () => {
 describe('Glob equivalents', () => {
   // A glob pattern, the pathmask patterns, the paths they match, the paths they do not match.
   const table = [
-    ['src/*.{js,ts}', ['src/*.js', 'src/*.ts'], ['src/a.js', 'src/a.ts'], ['src/a.css', 'a.js']],
     ['*.{j,t}s', ['/*.[jt]s'], ['a.js', 'a.ts'], ['a.cs', 'src/a.js']],
     ['app.log.{1..3}', ['/app.log.[1-3]'], ['app.log.1', 'app.log.3'], ['app.log.4', 'logs/app.log.1']],
-    ['src/*.@(js|ts)', ['src/*.js', 'src/*.ts'], ['src/a.js', 'src/a.ts'], ['src/a.css']],
+    ['src/*.{js,json}', ['src/*.js', 'src/*.json'], ['src/a.js', 'src/a.json'], ['src/a.css', 'a.js']],
+    ['src/*.@(ts|tsx)', ['src/*.ts', 'src/*.tsx'], ['src/a.ts', 'src/a.tsx'], ['src/a.js']],
     ['app?(.min).js', ['/app.js', '/app.min.js'], ['app.js', 'app.min.js'], ['app.x.js', 'src/app.js']],
     ['src/!(*.test).js', ['src/*.js', '!src/*.test.js'], ['src/a.js'], ['src/a.test.js']],
     ['!(vendor)/*.js', ['*/*.js', '!vendor/*.js'], ['lib/a.js'], ['vendor/a.js', 'a.js']],

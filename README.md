@@ -65,6 +65,8 @@ For common rules, the `.gitignore` syntax is shorter and easier to read than glo
 | `['**/dist', '**/dist/**']` | `['dist/']` |
 | `['**/.*']` with the option `{ dot: true }` | `['.*']` |
 
+To write glob patterns with `{a,b}` and extglob in pathmask, see [Glob equivalents](#glob-equivalents).
+
 ## Contents
 
 - [API](#api)
@@ -294,10 +296,10 @@ A glob pattern always starts at the root, so a pattern without `/` gets a leadin
 
 | glob | pathmask |
 |---|---|
-| `src/*.{js,ts}` | `['src/*.js', 'src/*.ts']` |
 | `*.{j,t}s` | `['/*.[jt]s']` |
 | `app.log.{1..3}` | `['/app.log.[1-3]']` |
-| `src/*.@(js\|ts)` | `['src/*.js', 'src/*.ts']` |
+| `src/*.{js,json}` | `['src/*.js', 'src/*.json']` |
+| `src/*.@(ts\|tsx)` | `['src/*.ts', 'src/*.tsx']` |
 | `app?(.min).js` | `['/app.js', '/app.min.js']` |
 | `src/!(*.test).js` | `['src/*.js', '!src/*.test.js']` |
 | `!(vendor)/*.js` | `['*/*.js', '!vendor/*.js']` |
